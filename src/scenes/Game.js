@@ -1,53 +1,26 @@
 import { Scene } from 'phaser';
+import { Field } from "../resource/field/field"
+import { Character } from "../resource/living/character"
+import { Npc } from "../resource/living/npc"
 
 export class Game extends Scene
 {
     constructor ()
     {
-        super('Game');
+        super('Game')
     }
 
     preload() {
-        this.gameX = 7
-        this.gameY = 7
-        this.gameOffsetX = 100
-        this.gameOffsetY = 100
-        this.playerX = 0
-        this.playerY = 0
-        this.playerImage = 0
-
-        this.moving = false
-        this.movingDirection = null
-        this.movingCounter = 0
-        this.movingCountMax = 20
-        this.movingPlayerUp = [9,10,11]
-        this.movingPlayerDown = [0,1,2]
-        this.movingPlayerLeft = [3,4,5]
-        this.movingPlayerRight = [6,7,8]
-        this.movingFinalX = -1
-        this.movingFinalY = -1
-
-        this.fieldNone = 1
-        this.ground = [
-            [ 0, 0, 0, 0, 0, 0, 0],
-            [ 0, 0, 0, 0, 0, 0, 0],
-            [ 0, 0, 0, 0, 0, 0, 0],
-            [ 0, 0, 0, 0, 0, 0, 0],
-            [ 0, 0, 0, 0, 0, 0, 0],
-            [ 0, 0, 0, 0, 0, 0, 0],
-            [ 0, 0, 0, 0, 0, 0, 0],
-        ]
-        this.field = []
-        for(let y = 0; y < this.gameY; y++) {
-            this.field.push([])
-            for(let x = 0; x < this.gameX; x++) {
-                this.field[y].push(this.fieldNone)
-            }
+        this.gameConfig = {
+            fieldX: 6,
+            fieldY: 6,
+            fieldOffsetX: 100,
+            fieldOffsetY: 100,
         }
-        this.field[2][2] = 10
-        this.field[2][3] = 10
-        this.field[3][3] = 10
-        this.field[3][4] = 10
+        this.field = new Field(this.gameConfig.fieldX, this.gameConfig.fieldY, 1)
+        this.character = new Character("player", 0, 0, this.gameConfig)
+        this.npc1 = new Npc("npc1", 5, 2, this.gameConfig)
+        this.npc2 = new Npc("npc2", 5, 3, this.gameConfig)
     }
 
     create () {
@@ -56,102 +29,83 @@ export class Game extends Scene
     }
 
     update () {
+        this.MoveNpcs()
         this.Manipulate()
         this.DrawField()
         this.DrawPlayer()
     }
 
     Manipulate() {
-        if(!this.moving) {
-            let direction = this._Manipulate()
-            if(direction != null) {
-                this.movingDirection = direction
-                this.moving = true
-            }
-        } else {
-            this.movingCounter += 1
-            if(this.movingCounter >= this.movingCountMax) {
-                this.moving = false
-                this.movingCounter = 0
-                this.playerX = this.movingFinalX
-                this.playerY = this.movingFinalY
-                if(this.movingDirection == "up") this.playerImage = this.movingPlayerUp[0]
-                if(this.movingDirection == "down") this.playerImage = this.movingPlayerDown[0]
-                if(this.movingDirection == "left") this.playerImage = this.movingPlayerLeft[0]
-                if(this.movingDirection == "right") this.playerImage = this.movingPlayerRight[0]
-            }
-        }
-    }
-    _Manipulate() {
-        let updateDirection = null
-        const cursors = this.input.keyboard.createCursorKeys();
-        let playerX = this.playerX
-        let playerY = this.playerY
-        if(cursors.up.isDown) playerY -= 1
-        if(cursors.down.isDown) playerY += 1
-        if(cursors.left.isDown) playerX -= 1
-        if(cursors.right.isDown) playerX += 1
+        const cursors = this.input.keyboard.createCursorKeys()
+        let moveX = 0
+        let moveY = 0
+        if(cursors.up.isDown) moveY -= 1
+        if(cursors.down.isDown) moveY += 1
+        if(cursors.left.isDown) moveX -= 1
+        if(cursors.right.isDown) moveX += 1
         if(cursors.space.isDown) {}
 
-        if(playerX < 0) playerX = 0
-        if(playerX >= this.gameX) playerX = this.gameX - 1
-        if(playerY < 0) playerY = 0
-        if(playerY >= this.gameY) playerY = this.gameY - 1
-
-        if(this.field[playerY][playerX] != 1) {
-            playerX = this.playerX
-            playerY = this.playerY
-        }
-
-        if(playerX != this.playerX) {
-            updateDirection = (playerX < this.playerX ? "left" : "right")
-        }
-        if(playerY != this.playerY) {
-            updateDirection = (playerY < this.playerY ? "up" : "down")
-        }
-
-        this.movingFinalX = playerX
-        this.movingFinalY = playerY
-
+        const updateDirection = this.character.move(this.field, [moveX, moveY])
         return updateDirection
     }
-    DrawField() {
-        if(this.moving) {
-            this.add.sprite(this.gameOffsetX + this.playerX * 40, this.gameOffsetY + this.playerY * 40, "fieldscene", this.ground[this.playerY][this.playerX])
-            this.add.sprite(this.gameOffsetX + this.movingFinalX * 40, this.gameOffsetY + this.movingFinalY * 40, "fieldscene", this.ground[this.movingFinalY][this.movingFinalX])
-        }
+
+    MoveNpcs() {
+        this.npc1.walkAround(this.field)
+        this.npc2.walkAround(this.field)
     }
-    DrawAllField() {
-        for(let y=0;y<this.ground.length;y++) {
-            for(let x=0;x<this.ground[y].length;x++) {
-                this.add.sprite(this.gameOffsetX + x * 40, this.gameOffsetY + y * 40, "fieldscene", this.ground[y][x]);
+
+    DrawField() {
+        const drawFieldCharacter = (character) => {
+            const gameConfig = this.gameConfig
+            const field = this.field
+            if(character.moving) {
+                this.add.sprite(gameConfig.fieldOffsetX + character.playerX * 40, gameConfig.fieldOffsetY + character.playerY * 40, "fieldscene", field.ground[character.playerY][character.playerX])
+                this.add.sprite(gameConfig.fieldOffsetX + character.movingFinalX * 40, gameConfig.fieldOffsetY + character.movingFinalY * 40, "fieldscene", field.ground[character.movingFinalY][character.movingFinalX])
             }
         }
-        for(let y=0;y<this.field.length;y++) {
-            for(let x=0;x<this.field[y].length;x++) {
-                this.add.sprite(this.gameOffsetX + x * 40, this.gameOffsetY + y * 40, "fieldscene", this.field[y][x]);
+        drawFieldCharacter(this.character)
+        drawFieldCharacter(this.npc1)
+        drawFieldCharacter(this.npc2)
+    }
+    DrawAllField() {
+        const gameConfig = this.gameConfig
+        const field = this.field
+        for(let y=0;y<field.ground.length;y++) {
+            for(let x=0;x<field.ground[y].length;x++) {
+                this.add.sprite(gameConfig.fieldOffsetX + x * 40, gameConfig.fieldOffsetY + y * 40, field.groundAsset, field.ground[y][x]);
+            }
+        }
+        for(let y=0;y<field.field.length;y++) {
+            for(let x=0;x<field.field[y].length;x++) {
+                this.add.sprite(gameConfig.fieldOffsetX + x * 40, gameConfig.fieldOffsetY + y * 40, field.groundAsset, field.field[y][x]);
             }
         }
     }
     DrawPlayer() {
-        if(this.moving) {
-            let movingImages = [0]
-            if(this.movingDirection == "up") movingImages = this.movingPlayerUp
-            if(this.movingDirection == "down") movingImages = this.movingPlayerDown
-            if(this.movingDirection == "left") movingImages = this.movingPlayerLeft
-            if(this.movingDirection == "right") movingImages = this.movingPlayerRight
+        const drawCharacter = (character) => {
+            if(character.moving) {
+                let movingImages = [0]
+                if(character.movingDirection == "up") movingImages = character.movingPlayerUp
+                if(character.movingDirection == "down") movingImages = character.movingPlayerDown
+                if(character.movingDirection == "left") movingImages = character.movingPlayerLeft
+                if(character.movingDirection == "right") movingImages = character.movingPlayerRight
 
-            let posX = this.gameOffsetX + 2 + this.playerX * 40
-            let posY = this.gameOffsetY + 2 + this.playerY * 40
-            let movingCountMax = this.movingCountMax - 1
-            if(this.movingDirection == "up") posY -= 40 * (this.movingCounter / movingCountMax)
-            if(this.movingDirection == "down") posY += 40 * (this.movingCounter / movingCountMax)
-            if(this.movingDirection == "left") posX -= 40 * (this.movingCounter / movingCountMax)
-            if(this.movingDirection == "right") posX += 40 * (this.movingCounter / movingCountMax)
-            let playerNo = Math.floor(movingImages.length * (this.movingCounter / this.movingCountMax))
-            this.add.sprite(posX, posY, "player", movingImages[playerNo]);
-        } else {
-            this.add.sprite(this.gameOffsetX + 2 + this.playerX * 40, this.gameOffsetY + 2 + this.playerY * 40, "player", this.playerImage);
+                let posX = this.gameConfig.fieldOffsetX + 2 + character.playerX * 40
+                let posY = this.gameConfig.fieldOffsetY + 2 + character.playerY * 40
+                let movingCountMax = character.movingCountMax - 1
+                if(character.movingDirection == "up") posY -= 40 * (character.movingCounter / movingCountMax)
+                if(character.movingDirection == "down") posY += 40 * (character.movingCounter / movingCountMax)
+                if(character.movingDirection == "left") posX -= 40 * (character.movingCounter / movingCountMax)
+                if(character.movingDirection == "right") posX += 40 * (character.movingCounter / movingCountMax)
+                let playerNo = Math.floor(movingImages.length * (character.movingCounter / character.movingCountMax))
+                this.add.sprite(posX, posY, character.playerAsset, movingImages[playerNo]);
+            } else {
+                this.add.sprite(this.gameConfig.fieldOffsetX + 2 + character.playerX * 40, this.gameConfig.fieldOffsetY + 2 + character.playerY * 40, character.playerAsset, character.playerImage);
+            }
         }
+        
+        drawCharacter(this.character)
+        drawCharacter(this.npc1)
+        drawCharacter(this.npc2)
     }
 }
